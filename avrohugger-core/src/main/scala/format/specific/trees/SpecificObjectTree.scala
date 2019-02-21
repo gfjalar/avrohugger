@@ -3,7 +3,6 @@ package format
 package specific
 package trees
 
-import generators.ScalaDocGenerator
 import matchers.TypeMatcher
 import stores.SchemaStore
 
@@ -23,6 +22,9 @@ object SpecificObjectTree {
     schemaStore: SchemaStore,
     typeMatcher: TypeMatcher) = {
     val ParserClass = RootClass.newClass("org.apache.avro.Schema.Parser")
+    val SpecificDataClass = RootClass.newClass("org.apache.avro.specific.SpecificData")
+    val DatumWriterClass = RootClass.newClass("org.apache.avro.io.DatumWriter")
+    val DatumReaderClass = RootClass.newClass("org.apache.avro.io.DatumReader")
     val objectDef = maybeFlags match {
       case Some(flags) => OBJECTDEF(schema.getName).withFlags(flags:_*)
       case None => OBJECTDEF(schema.getName)
@@ -41,9 +43,24 @@ object SpecificObjectTree {
         case None => false
       })
     }
+    val modelDef = VAL(REF("MODEL$")) := {
+      NEW(SpecificDataClass) APPLY()
+    }
+    val writerDef = VAL(REF("WRITER$")) := {
+      REF("MODEL$") DOT "createDatumWriter" APPLY (REF("SCHEMA$")) AS
+        (DatumWriterClass TYPE_OF TYPE_REF(REF(schema.getName)))
+    }
+    val readerDef = VAL(REF("READER$")) := {
+      REF("MODEL$") DOT "createDatumReader" APPLY (REF("SCHEMA$")) AS
+        (DatumReaderClass TYPE_OF TYPE_REF(REF(schema.getName)))
+    }
+
+    val blockElements = List(schemaDef) :::
+      List(modelDef, writerDef, readerDef).filter(_ => schema.isError) :::
+      List(decimalConversionDef).filter(_ => schemaContainsDecimal(schema))
+
     // companion object definition
-    if (schemaContainsDecimal(schema)) objectDef := BLOCK(schemaDef, decimalConversionDef)
-    else objectDef := BLOCK(schemaDef)
+    objectDef := BLOCK(blockElements)
   }
   
   // Companion to traits that have messages

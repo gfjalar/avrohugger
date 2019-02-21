@@ -31,7 +31,7 @@ object SpecificCaseClassTree {
     val shouldGenerateSimpleClass = restrictedFields && avroFields.size > 22
 
     // generate list of constructor parameters
-    val params: List[ValDef] = avroFields.map { f =>
+    val avroParams: List[ValDef] = avroFields.map { f =>
       val fieldName = f.name
       val fieldType = typeMatcher.toScalaType(classStore, namespace, f.schema)
       val defaultValue = DefaultValueMatcher.getDefaultValue(
@@ -41,19 +41,32 @@ object SpecificCaseClassTree {
         typeMatcher)
       VAR(fieldName, fieldType) := defaultValue
     }
+    val errorParams: List[ValDef] = if (schema.isError()) {
+      (VAR("value", AnyClass) := NULL) :: (VAR("cause", ThrowableClass) := NULL) :: Nil
+    } else {
+      Nil
+    }
 
     // extension
-    val baseClassName = "org.apache.avro.specific.SpecificRecordBase"
-    val baseClass = RootClass.newClass(baseClassName)
+    val errorBaseClass = RootClass.newClass("org.apache.avro.specific.SpecificExceptionBase") APPLY (REF("value"), REF("cause"))
+    val baseClass = if (schema.isError) {
+      RootClass.newClass("org.apache.avro.specific.SpecificRecord")
+    } else {
+      RootClass.newClass("org.apache.avro.specific.SpecificRecordBase")
+    }
 
     // no-arg constructor: make arbitrary default if none is provided
-    val defaultParams: List[Tree] = avroFields.zip(params).map(f => {
+    val defaultAvroParams: List[Tree] = avroFields.zip(avroParams).map(f => {
       val (avroField, defaultValue) = (f._1, f._2.rhs)
       if (defaultValue == EmptyTree)
         DefaultParamMatcher.asDefaultParam(classStore, avroField.schema, typeMatcher)
       else
         defaultValue
     })
+
+    val params: List[ValDef] = errorParams ::: avroParams
+    val defaultParams: List[Tree] = errorParams.map(_.rhs) ::: defaultAvroParams
+
     val defThis = DEFTHIS.withParams(PARAM("")).tree := {
       THIS APPLY(defaultParams:_*)
     }
@@ -62,7 +75,7 @@ object SpecificCaseClassTree {
     val indexedFields = avroFields.zipWithIndex.map(p => {
       val avroField = p._1
       val index = p._2
-      IndexedField(avroField, index)
+      IndexedField(avroField, errorParams.size + index)
     })
     val defGetSchema = GetSchemaGenerator(classSymbol).toDef
     val defGet = GetGenerator.toDef(indexedFields, classSymbol, typeMatcher)
@@ -72,96 +85,39 @@ object SpecificCaseClassTree {
       indexedFields,
       typeMatcher,
       classSymbol)
+    val defWriteExternal = WriteExternalGenerator(classSymbol).toDef
+    val defReadExternal = ReadExternalGenerator(classSymbol).toDef
 
     // define the class def with the members previously defined
     // There could be base traits, flags, or both, and could have no fields
-    val caseClassDef = (maybeBaseTrait, maybeFlags) match {
-      case (Some(baseTrait), Some(flags)) =>
-        if (shouldGenerateSimpleClass) {
-          CLASSDEF(classSymbol)
-            .withFlags(flags:_*)
-            .withParams(params)
-            .withParents(baseClass)
-            .withParents(baseTrait)
-        }
-        else if (avroFields.nonEmpty) {
-          CASECLASSDEF(classSymbol)
-            .withFlags(flags:_*)
-            .withParams(params)
-            .withParents(baseClass)
-            .withParents(baseTrait)
-        }
-        else { // for "empty" records: empty params and no no-arg ctor
-          CASECLASSDEF(classSymbol)
-            .withFlags(flags:_*)
-            .withParams(PARAM(""))
-            .withParents(baseClass)
-            .withParents(baseTrait)
-        }
-      case (Some(baseTrait), None) =>
-        if (!avroFields.isEmpty) {
-          CASECLASSDEF(classSymbol)
-            .withParams(params)
-            .withParents(baseClass)
-            .withParents(baseTrait)
-        }
-        else { // for "empty" records: empty params and no no-arg ctor
-          CASECLASSDEF(classSymbol)
-            .withParams(PARAM(""))
-            .withParents(baseClass)
-            .withParents(baseTrait)
-        }
-      case (None, Some(flags)) =>
-        if (shouldGenerateSimpleClass) {
-          CLASSDEF(classSymbol)
-            .withFlags(flags:_*)
-            .withParams(params)
-            .withParents(baseClass)
-            .withParents("Serializable")
-        }
-        else if (avroFields.nonEmpty) {
-          CASECLASSDEF(classSymbol)
-            .withFlags(flags:_*)
-            .withParams(params)
-            .withParents(baseClass)
-        }
-        else { // for "empty" records: empty params and no no-arg ctor
-          CASECLASSDEF(classSymbol)
-            .withFlags(flags:_*)
-            .withParams(PARAM(""))
-            .withParents(baseClass)
-        }
-      case (None, None) =>
-        if (shouldGenerateSimpleClass) {
-          CLASSDEF(classSymbol)
-            .withParams(params)
-            .withParents(baseClass)
-            .withParents("Serializable")
-        }
-        else if (!avroFields.isEmpty) {
-          CASECLASSDEF(classSymbol)
-            .withParams(params)
-            .withParents(baseClass)
-        }
-        else { // for "empty" records: empty params and no no-arg ctor
-          CASECLASSDEF(classSymbol)
-            .withParams(PARAM(""))
-            .withParents(baseClass)
-        }
+    val classDef = {
+      val baseDef = if (shouldGenerateSimpleClass) { CLASSDEF(classSymbol) } else { CASECLASSDEF(classSymbol) }
+
+      val defWithParents = if (schema.isError) {
+        baseDef.withParents(errorBaseClass).withParents(baseClass)
+      } else {
+        baseDef.withParents(baseClass)
+      }
+
+      val defWithTrait = if (maybeBaseTrait.nonEmpty) {
+        defWithParents.withParents(maybeBaseTrait.get)
+      } else if (shouldGenerateSimpleClass) {
+        defWithParents.withParents("Serializable")
+      } else {
+        defWithParents
+      }
+
+      val defWithFlags = defWithTrait.withFlags(maybeFlags.getOrElse(List.empty[Long]): _*)
+      val defWithParams = if (params.nonEmpty) defWithFlags.withParams(params) else defWithFlags.withParams(PARAM(""))
+
+      defWithParams
     }
 
-    val caseClassTree = {
-      // for "empty" records: empty params and no no-arg ctor
-      if (!avroFields.isEmpty) caseClassDef := BLOCK(
-        defThis,
-        defGet,
-        defPut,
-        defGetSchema)
-     else caseClassDef := BLOCK(
-        defGet,
-        defPut,
-        defGetSchema)
-    }
+    val blockElements = List(defThis).filter(_ => params.nonEmpty) :::
+      List(defGet, defPut, defGetSchema) :::
+      List(defWriteExternal, defReadExternal).filter(_ => schema.isError)
+
+    val caseClassTree = classDef := BLOCK(blockElements)
 
     val treeWithScalaDoc = ScalaDocGenerator.docToScalaDoc(
       Left(schema),

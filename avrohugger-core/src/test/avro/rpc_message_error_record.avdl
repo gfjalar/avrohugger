@@ -1,0 +1,9 @@
+@namespace("example.idl")
+protocol RPCMessageErrorRecordProtocol {
+  error RPCMessageErrorRecord1 {}
+  error RPCMessageErrorRecord2 {
+    string id;
+  }
+
+  boolean doThrow() throws RPCMessageErrorRecord1, RPCMessageErrorRecord2;
+}
