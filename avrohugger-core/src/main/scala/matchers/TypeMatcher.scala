@@ -70,7 +70,10 @@ class TypeMatcher(
           val unionSchemas = schema.getTypes.asScala.toList
           unionTypeImpl(unionSchemas, matchType)
         }
-        case x => sys.error( x + " is not supported or not a valid Avro type")
+        case x => namespace match {
+          case Some(ns) => s"$ns.${schema.getName}"
+          case None => schema.getName
+        }
       }
     }
     

@@ -1,0 +1,4 @@
+@namespace("example.idl")
+protocol RPCMessageNoParamsProtocol {
+  int random();
+}

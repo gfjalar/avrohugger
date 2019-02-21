@@ -1,0 +1,4 @@
+@namespace("example.idl")
+protocol RPCMessageManyParamsProtocol {
+  string concatenate(string a, string b);
+}

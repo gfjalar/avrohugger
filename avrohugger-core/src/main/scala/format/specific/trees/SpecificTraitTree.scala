@@ -78,17 +78,12 @@ object SpecificTraitTree {
       case _ => typeMatcher.toScalaType(classStore, namespace, schema)
     }
     
-    def asRequestParam(message: Protocol#Message): ValDef = {
-      val request = message.getRequest.getFields.asScala.headOption match {
-        case Some(avroField) => avroField
-        case None => sys.error("""Expected a request field, found no fields.""")
+    def asRequestParams(message: Protocol#Message): Seq[ValDef] = {
+      message.getRequest.getFields.asScala.map { request =>
+        val requestParamName = request.name
+        val requestParamTypeName = asReturnType(request.schema)
+        PARAM(requestParamName, requestParamTypeName).tree
       }
-      val requestParamName = request.name
-      val requestParamTypeName = namespace match {
-        case Some(ns) => s"$ns.${request.schema.getName}"
-        case None => request.schema.getName
-      }
-      PARAM(requestParamName, requestParamTypeName).tree
     }
     
     def asCallbackParam(message: Protocol#Message): ValDef = {
@@ -102,9 +97,9 @@ object SpecificTraitTree {
     val messageDefs: List[Tree] = protocol.getMessages.asScala.toList.map(kvPair => {
       val defName = kvPair._1
       val message = kvPair._2
-      val requestParam = asRequestParam(message)
+      val requestParams = asRequestParams(message)
       val returnType = asReturnType(message.getResponse)
-      val defTree = DEF(defName, returnType).withParams(requestParam).tree
+      val defTree = DEF(defName, returnType).withParams(requestParams).tree
       defTree
     })
     
@@ -112,9 +107,9 @@ object SpecificTraitTree {
     val callbackDefs: List[Tree] = protocol.getMessages.asScala.toList.map(kvPair => {
       val defName = kvPair._1
       val message = kvPair._2
-      val requestParam = asRequestParam(message)
+      val requestParams = asRequestParams(message)
       val callbackParam = asCallbackParam(message)
-      val params = List(requestParam, callbackParam)
+      val params = requestParams :+ callbackParam
       val defTree = DEF(defName, UnitClass).withParams(params).tree
       defTree.withDoc(callbackDefDocString)
     })
