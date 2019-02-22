@@ -1,0 +1,4 @@
+@namespace("example.idl")
+protocol RPCMessageCustomTypesProtocol {
+  void doNothing(string s, map<string> m, array<string> l);
+}

@@ -25,9 +25,11 @@ case object ScalaArray extends AvroScalaArrayType
 case object ScalaList extends AvroScalaArrayType
 case object ScalaSeq extends AvroScalaArrayType
 case object ScalaVector extends AvroScalaArrayType
+case object JavaList extends AvroScalaArrayType
 // map
 sealed trait AvroScalaMapType extends Product with Serializable
 case object ScalaMap extends AvroScalaMapType
+case object JavaMap extends AvroScalaMapType
 // protocol
 sealed trait AvroScalaProtocolType extends Product with Serializable
 case object ScalaADT extends AvroScalaProtocolType

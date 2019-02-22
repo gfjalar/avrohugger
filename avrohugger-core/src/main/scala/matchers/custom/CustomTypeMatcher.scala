@@ -11,12 +11,27 @@ import treehuggerDSL._
 import definitions._
 
 object CustomTypeMatcher {
+  def checkCustomStringType(stringType: AvroScalaStringType) = stringType match {
+    case ScalaString => StringClass
+    case JavaString => RootClass.newClass(nme.createNameType("java.lang.CharSequence"))
+  }
+
+  def checkCustomMapType(mapType: AvroScalaMapType) = mapType match {
+    case ScalaMap => (k: Type, v: Type) => TYPE_MAP(k, v)
+    case JavaMap  => (k: Type, v: Type) => TYPE_REF(REF("java.util.Map") APPLYTYPE(k, v))
+  }
+
+  def checkCustomNullType(nullType: AvroScalaNullType) = nullType match {
+    case ScalaNull => NullClass
+    case ScalaUnit => UnitClass
+  }
 
   def checkCustomArrayType(arrayType: AvroScalaArrayType) = arrayType match {
     case ScalaArray  => TYPE_ARRAY(_)
     case ScalaList   => TYPE_LIST(_)
     case ScalaSeq    => TYPE_SEQ(_)
     case ScalaVector => TYPE_VECTOR(_)
+    case JavaList    => (typ: Type) => TYPE_REF(REF("java.util.List") APPLYTYPE(typ))
   }
   
   def checkCustomEnumType(

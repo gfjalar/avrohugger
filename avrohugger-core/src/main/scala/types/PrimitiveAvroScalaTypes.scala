@@ -13,9 +13,11 @@ case object ScalaBoolean extends AvroScalaBooleanType
 // strings
 sealed trait AvroScalaStringType extends Product with Serializable
 case object ScalaString extends AvroScalaStringType
+case object JavaString extends AvroScalaStringType
 // null
 sealed trait AvroScalaNullType extends Product with Serializable
 case object ScalaNull extends AvroScalaNullType
+case object ScalaUnit extends AvroScalaNullType
 // bytes
 sealed trait AvroScalaBytesType extends Product with Serializable
 case object ScalaByteArray extends AvroScalaBytesType

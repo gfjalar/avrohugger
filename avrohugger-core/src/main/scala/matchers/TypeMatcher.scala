@@ -34,10 +34,11 @@ class TypeMatcher(
           collectionType(scalaElementType)
         }
         case Schema.Type.MAP      => {
-          val keyType = StringClass
+          val keyType = CustomTypeMatcher.checkCustomStringType(avroScalaTypes.string)
           val avroValueType = schema.getValueType
           val scalaValueType = toScalaType(classStore, namespace, avroValueType)
-          TYPE_MAP(keyType, scalaValueType)
+          val collectionType = CustomTypeMatcher.checkCustomMapType(avroScalaTypes.map)
+          collectionType(keyType, scalaValueType)
         }
         case Schema.Type.BOOLEAN  => BooleanClass
         case Schema.Type.DOUBLE   => CustomTypeMatcher.checkCustomNumberType(avroScalaTypes.double)
@@ -54,11 +55,11 @@ class TypeMatcher(
             default = CustomTypeMatcher.checkCustomNumberType(avroScalaTypes.int)) {
             case Date => CustomTypeMatcher.checkCustomDateType(avroScalaTypes.date)
           }
-        case Schema.Type.NULL     => NullClass
+        case Schema.Type.NULL     => CustomTypeMatcher.checkCustomNullType(avroScalaTypes.`null`)
         case Schema.Type.STRING   =>
           LogicalType.foldLogicalTypes(
             schema = schema,
-            default = StringClass) {
+            default = CustomTypeMatcher.checkCustomStringType(avroScalaTypes.string)) {
             case UUID => RootClass.newClass(nme.createNameType("java.util.UUID"))
           }
         case Schema.Type.FIXED    => sys.error("FIXED datatype not yet supported")
